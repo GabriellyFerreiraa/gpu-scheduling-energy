@@ -6,6 +6,10 @@ A data center simulator built to answer one question: **does packing AI workload
 
 Packing lets you power machines off and kill idle draw. But it also concentrates heat, and cooling a hotspot costs more than cooling several warm machines. This repo maps where the balance sits — and what happens once you add startup costs and variable demand.
 
+![Energy vs latency Pareto frontier](pareto.png)
+
+*Every point is one scheduling policy at one idle timeout, averaged over 30 scenarios. Nine of sixteen sit on the frontier — spreading wins on energy, packing wins on wait time, and neither dominates. The seven points off the frontier are strictly worse on both axes.*
+
 ## 📊 Results at a glance
 
 | # | Finding | Status |
