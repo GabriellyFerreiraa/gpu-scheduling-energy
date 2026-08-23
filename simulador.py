@@ -1,6 +1,10 @@
 """
-Modelo del data center - v2
-Cambio: factor_hotspot ahora es PARAMETRO, no constante global.
+Modelo del data center - v4
+
+v2: factor_hotspot pasa de constante global a parametro
+v3: generar_workloads_ondas (llegadas con picos y valles)
+v4: metricas de latencia (espera_p95, espera_max, sin_iniciar,
+    pct_atendidas)
 """
 import random
 
