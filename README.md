@@ -194,7 +194,7 @@ Abra os notebooks no Colab e rode as células em ordem. A primeira célula escre
 
 ```
 simulador.py                    # model: GPU, Workload, schedulers, simular()
-01_scheduling_energia.ipynb     # static model, sensitivity analysis
+01_umbral_hotspot.ipynb         # static model, sensitivity analysis
 02_efecto_del_tiempo.ipynb      # time, thrashing, adaptive scheduler, confirmation
 README.md
 ```
