@@ -129,13 +129,29 @@ def simular(elegir_gpu, workloads, idle_timeout, factor_hotspot):
                     g.tareas.remove(w)
             g.tick(t)
 
-    esperas = [w.espera() for w in workloads if w.inicio is not None]
+    iniciadas = [w for w in workloads if w.inicio is not None]
+    esperas = sorted(w.espera() for w in iniciadas)
+    sin_iniciar = len(workloads) - len(iniciadas)
+
+    def percentil(datos, p):
+        if not datos:
+            return 0
+        i = min(int(p * len(datos)), len(datos) - 1)
+        return datos[i]
+
     return {
         "total": energia_it + energia_cool,
         "it": energia_it,
         "cool": energia_cool,
         "encendidos": encendidos,
+        # --- latencia ---
+        # OJO: prom/p95/max solo cuentan las tareas que ARRANCARON.
+        # Sin mirar sin_iniciar, un scheduler que mata tareas parece rapido.
         "espera_prom": sum(esperas) / len(esperas) if esperas else 0,
+        "espera_p95": percentil(esperas, 0.95),
+        "espera_max": esperas[-1] if esperas else 0,
+        "sin_iniciar": sin_iniciar,
+        "pct_atendidas": len(iniciadas) / len(workloads) * 100,
     }
 
 

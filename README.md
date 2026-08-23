@@ -11,15 +11,18 @@ Packing lets you power machines off and kill idle draw. But it also concentrates
 | # | Finding | Status |
 |---|---|---|
 | 1 | A thermal penalty threshold exists (~0.32) where the winning strategy flips | ⚠️ overturned by #2 |
-| 2 | With realistic boot costs, that threshold collapses to ~0.0 — packing stops being competitive | ✅ holds |
+| 2 | With realistic boot costs, that threshold collapses to ~0.0 — packing stops winning **on energy** | ⚠️ narrowed by #5 |
 | 3 | Powering off too fast is expensive; the optimal idle timeout is a **zone** (5–15 min), not a value | ✅ holds |
 | 4 | An adaptive scheduler beats spreading by **0.18%** under variable load — significant, irrelevant | ❌ negative result |
+| 5 | Once latency is measured, spreading and packing are **not** better and worse — they are two ends of a Pareto trade-off | ✅ holds |
 
 ### 🔍 The headline
 
-> Adaptive switching between packing and spreading, driven by system load, is **not** a promising route to energy savings in this model. The hypothesis held in direction but failed in magnitude: 0.18% improvement, present in only 56 of 100 scenarios.
+> There is no single best scheduler. Spreading minimises energy; packing minimises wait time and tail latency. Nine of sixteen tested configurations sit on the Pareto frontier — none of them dominates the others, and choosing between them requires deciding what a minute of waiting is worth against a kWh. That is a business decision, not a technical one.
 
-Documented deliberately. A well-measured negative result saves work for whoever comes next.
+For most of this project spreading appeared to win outright. It won on the only axis being measured. Adding the second axis reframed the entire result — a reminder that a single-objective conclusion is only as honest as the objectives you left out.
+
+**Secondary (negative) result:** adaptive switching between the two policies, driven by system load, is not a promising route to energy savings. The hypothesis held in direction but failed in magnitude — 0.18% improvement, present in only 56 of 100 scenarios.
 
 ### 🧪 How each claim was tested
 
@@ -31,6 +34,7 @@ Documented deliberately. A well-measured negative result saves work for whoever 
 | Experimental control | Amplitude 0.0 baseline, to attribute cause |
 | Pre-registered thresholds | Never pick the best parameter after seeing the data |
 | Held-out seeds | Confirm on data never used during exploration |
+| Pareto analysis | Compare on two objectives at once, instead of collapsing to one |
 
 Finding #4 is why this matters: during exploration, two metrics appeared to win. Under confirmation with fresh seeds and frozen thresholds, one turned out to be a false positive from having tested 24 combinations.
 
@@ -68,7 +72,7 @@ The cubic exponent comes from fan affinity laws (fan power scales with the cube 
 
 1. **The cooling model is unvalidated.** The hotspot factor is invented, and the cubic exponent is applied to utilisation rather than airflow. The real chain (utilisation → power → temperature → RPM → fan power) has links the model skips.
 2. **Boot costs are estimates.** 3 minutes at 400 W is plausible but unmeasured — and this parameter determines where finding #2's frontier falls.
-3. **No quality of service.** Wait time is recorded but no conclusion uses it. A scheduler that saves energy by making users wait would be useless in production, and this work wouldn't catch it.
+3. **Quality of service is measured but the system is never saturated.** Zero tasks failed to start in any run, so all latency figures come from a comfortable regime. Under real contention the trade-off would likely be sharper. Wait times also differ by only ~30 seconds across the whole frontier — the *shape* of the trade-off is real, the *magnitude* is not yet meaningful.
 4. **Small scale.** 5 GPUs, 60 tasks, 4 hours. Fragmentation and placement behave qualitatively differently at hundreds of nodes.
 5. **No real traces.** Workloads are synthetic; duration and demand distributions come from nowhere in particular.
 6. **Water consumption is not modelled**, despite being part of the original motivation. Water depends on cooling design and climate, not on the scheduler — software can only shift it in time and space.
@@ -118,7 +122,7 @@ El exponente cúbico viene de las leyes de afinidad de ventiladores (la potencia
 
 1. **El modelo de refrigeración no está validado.** El factor de hotspot es inventado, y el exponente cúbico se aplica a la utilización en lugar del caudal de aire. La cadena real (utilización → potencia → temperatura → RPM → potencia del ventilador) tiene eslabones que el modelo saltea.
 2. **Los costos de encendido son estimados.** 3 minutos a 400 W es plausible pero no medido — y este parámetro determina dónde cae la frontera del hallazgo #2.
-3. **No se mide calidad de servicio.** El tiempo de espera se registra pero ninguna conclusión lo usa. Un scheduler que ahorra energía haciendo esperar a los usuarios sería inservible en producción, y este trabajo no lo detectaría.
+3. **Se mide calidad de servicio, pero el sistema nunca se satura.** Ninguna tarea quedó sin arrancar en ninguna corrida, así que todas las cifras de latencia vienen de un régimen holgado. Bajo contención real el trade-off sería más marcado. Además las esperas difieren en apenas ~30 segundos a lo largo de toda la frontera: la *forma* del trade-off es real, la *magnitud* todavía no es relevante.
 4. **Escala pequeña.** 5 GPUs, 60 tareas, 4 horas. La fragmentación y las decisiones de colocación cambian cualitativamente a escala de cientos de nodos.
 5. **Sin trazas reales.** Los workloads son sintéticos; las distribuciones de duración y demanda no provienen de mediciones.
 6. **No se modela el consumo de agua**, pese a ser parte de la motivación original. El agua depende del diseño de refrigeración y del clima, no del scheduler — el software solo puede desplazarla en tiempo y espacio.
@@ -168,7 +172,7 @@ O expoente cúbico vem das leis de afinidade de ventiladores (a potência do ven
 
 1. **O modelo de refrigeração não é validado.** O fator de hotspot é inventado, e o expoente cúbico é aplicado à utilização em vez da vazão de ar. A cadeia real (utilização → potência → temperatura → RPM → potência do ventilador) tem elos que o modelo pula.
 2. **Os custos de boot são estimados.** 3 minutos a 400 W é plausível mas não medido — e esse parâmetro determina onde cai a fronteira do achado #2.
-3. **Não há métrica de qualidade de serviço.** O tempo de espera é registrado mas nenhuma conclusão o usa. Um scheduler que economiza energia fazendo os usuários esperarem seria inútil em produção, e este trabalho não detectaria isso.
+3. **Qualidade de serviço é medida, mas o sistema nunca satura.** Nenhuma tarefa deixou de iniciar em nenhuma execução, então todos os números de latência vêm de um regime folgado. Sob contenção real o trade-off seria mais acentuado. Além disso as esperas diferem em apenas ~30 segundos ao longo de toda a fronteira: a *forma* do trade-off é real, a *magnitude* ainda não é relevante.
 4. **Escala pequena.** 5 GPUs, 60 tarefas, 4 horas. Fragmentação e decisões de alocação mudam qualitativamente na escala de centenas de nós.
 5. **Sem traces reais.** Os workloads são sintéticos; as distribuições de duração e demanda não vêm de medições.
 6. **O consumo de água não é modelado**, apesar de fazer parte da motivação original. A água depende do projeto de refrigeração e do clima, não do scheduler — o software só pode deslocá-la no tempo e no espaço.
@@ -200,7 +204,8 @@ The model is defined once and imported by both notebooks, so a change to the phy
 ## 🔭 Next steps
 
 - Sweep boot cost, now the critical parameter
-- Add quality-of-service metrics and study the energy/latency trade-off
+- Push the system into saturation, where the energy/latency trade-off should sharpen
+- Investigate fragmentation: spreading leaves capacity split across GPUs in unusable pieces, which is the likely cause of its worse tail latency
 - Validate workload distributions against public cluster traces
 - Investigate the observed mechanism by which variable load reduces packing's disadvantage (less thrashing during troughs)
 
