@@ -1,10 +1,11 @@
 """
-Modelo del data center - v4
+Modelo del data center - v5
 
 v2: factor_hotspot pasa de constante global a parametro
 v3: generar_workloads_ondas (llegadas con picos y valles)
 v4: metricas de latencia (espera_p95, espera_max, sin_iniciar,
     pct_atendidas)
+v5: n_tareas parametrizable, para poder saturar el sistema
 """
 import random
 
@@ -169,12 +170,14 @@ def generar_workloads(semilla):
     ) for i in range(N_TAREAS)]
 
 
-def generar_workloads_ondas(semilla, amplitud=1.0, ciclos=2):
+def generar_workloads_ondas(semilla, amplitud=1.0, ciclos=2,
+                            n_tareas=N_TAREAS):
     """Como generar_workloads, pero las llegadas se concentran en picos.
 
     amplitud = 0.0 -> llegadas parejas (control)
     amplitud = 1.0 -> picos y valles marcados
     ciclos         -> cuantas olas entran en la simulacion
+    n_tareas       -> subirlo satura el sistema
     """
     import math
     rng = random.Random(semilla)
@@ -185,11 +188,11 @@ def generar_workloads_ondas(semilla, amplitud=1.0, ciclos=2):
              for t in range(ventana)]
     pesos = [max(p, 0.01) for p in pesos]      # nunca negativo
 
-    llegadas = rng.choices(range(ventana), weights=pesos, k=N_TAREAS)
+    llegadas = rng.choices(range(ventana), weights=pesos, k=n_tareas)
 
     return [Workload(
         id=i,
         llegada=llegadas[i],
         duracion=rng.randint(10, 40),
         demanda=round(rng.uniform(0.1, 0.6), 2),
-    ) for i in range(N_TAREAS)]
+    ) for i in range(n_tareas)]
