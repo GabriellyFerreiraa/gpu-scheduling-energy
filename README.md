@@ -20,6 +20,8 @@ Packing lets you power machines off and kill idle draw. But it also concentrates
 | 4 | An adaptive scheduler beats spreading by **0.18%** under variable load — significant, irrelevant | ❌ negative result |
 | 5 | Once latency is measured, spreading and packing are **not** better and worse — they are two ends of a Pareto trade-off | ⚠️ narrowed by #6 |
 | 6 | Under saturation, the choice of scheduler stops mattering entirely — all three policies converge | ✅ holds |
+| 7 | They converge because the remaining options become **equivalent**, not because they disappear | ✅ holds |
+| — | *Hypothesis: convergence is caused by the collapse of available choices* | ❌ refuted by direct measurement |
 
 ### 🔍 The headline
 
@@ -27,7 +29,15 @@ Packing lets you power machines off and kill idle draw. But it also concentrates
 
 For most of this project spreading appeared to win outright. It won on the only axis being measured. Adding the second axis reframed the entire result — a reminder that a single-objective conclusion is only as honest as the objectives you left out.
 
-**But that trade-off only exists while there is slack.** Pushing offered load from 60 to 300 tasks, all three policies converge: identical breaking point (150 tasks), identical wait times, identical energy to four decimal places. When every GPU is full there is no placement decision left to make. The scheduler matters in a narrow band — roughly 60–150 tasks here — and nowhere else.
+**But that trade-off only exists while there is slack.** Pushing offered load from 60 to 300 tasks, all three policies converge: identical breaking point, identical wait times, identical energy to four decimal places. The scheduler matters in a narrow band — roughly 60–150 tasks here — and nowhere else.
+
+**Why they converge turned out not to be the obvious answer.** The intuitive explanation is that the scheduler runs out of choices: at high load, 96% of placements have only one feasible GPU, so different policies are forced into the same decision. That explanation is wrong, and measuring it directly is what showed it. Policies keep placing tasks on *different* GPUs 62% of the time even at maximum load — they diverge early, their system states drift apart, and the single available GPU is simply not the same GPU in each run.
+
+What actually collapses is not the number of options but the difference between them. Load spread across candidate GPUs falls from 0.250 to 0.051, and since cooling cost scales with the cube of per-GPU load, near-identical candidates produce near-identical outcomes. The instantaneous impact of a placement decision drops from 1.8% of system power to 0.025%.
+
+> **The policy does not run out of alternatives. It runs out of *distinguishable* alternatives.**
+
+The practical consequence: average cluster utilisation bounds how much any placement optimisation can deliver. A system running near capacity does not benefit from a better scheduler — it benefits from more capacity or less work.
 
 **Secondary (negative) result:** adaptive switching between the two policies, driven by system load, is not a promising route to energy savings. The hypothesis held in direction but failed in magnitude — 0.18% improvement, present in only 56 of 100 scenarios.
 
@@ -42,6 +52,8 @@ For most of this project spreading appeared to win outright. It won on the only 
 | Pre-registered thresholds | Never pick the best parameter after seeing the data |
 | Held-out seeds | Confirm on data never used during exploration |
 | Pareto analysis | Compare on two objectives at once, instead of collapsing to one |
+| Non-interfering instrumentation | Decorators that observe scheduler decisions without altering them |
+| Mechanism measurement | Measure the proposed cause directly, rather than inferring it from a correlated symptom |
 
 Finding #4 is why this matters: during exploration, two metrics appeared to win. Under confirmation with fresh seeds and frozen thresholds, one turned out to be a false positive from having tested 24 combinations.
 
@@ -81,9 +93,10 @@ The cubic exponent comes from fan affinity laws (fan power scales with the cube 
 2. **Boot costs are estimates.** 3 minutes at 400 W is plausible but unmeasured — and this parameter determines where finding #2's frontier falls.
 3. **The Pareto trade-off only holds under slack.** Wait times differ by ~30 seconds across the entire frontier at 60 tasks. Raise offered load and the differences vanish: at 150+ tasks all policies are identical. So the trade-off is real but confined to a narrow load band, and its magnitude there is small.
 4. **Throughput-normalised metrics mislead under saturation.** Energy per served task *falls* from 74 to 61 Wh as load triples — because total energy plateaus while served tasks keep rising. A system that drops 45% of its work looks maximally efficient. Any conclusion drawn above 150 tasks must be read alongside the completion rate.
-5. **Small scale.** 5 GPUs, 60 tasks, 4 hours. Fragmentation and placement behave qualitatively differently at hundreds of nodes.
-6. **No real traces.** Workloads are synthetic; duration and demand distributions come from nowhere in particular.
-7. **Water consumption is not modelled**, despite being part of the original motivation. Water depends on cooling design and climate, not on the scheduler — software can only shift it in time and space.
+5. **The mechanism result applies to one scheduler class.** Findings 6 and 7 were measured on two stateless greedy policies (emptiest-fit and fullest-fit). Stateful, predictive, or preemptive schedulers might retain leverage where these lose it. The Decision Impact metric is also myopic — it captures instantaneous cost, not the downstream consequences of a placement — so it is a lower bound.
+6. **Small scale.** 5 GPUs, 60 tasks, 4 hours. Fragmentation and placement behave qualitatively differently at hundreds of nodes.
+7. **No real traces.** Workloads are synthetic; duration and demand distributions come from nowhere in particular.
+8. **Water consumption is not modelled**, despite being part of the original motivation. Water depends on cooling design and climate, not on the scheduler — software can only shift it in time and space.
 
 ### Running locally
 
@@ -132,9 +145,10 @@ El exponente cúbico viene de las leyes de afinidad de ventiladores (la potencia
 2. **Los costos de encendido son estimados.** 3 minutos a 400 W es plausible pero no medido — y este parámetro determina dónde cae la frontera del hallazgo #2.
 3. **El trade-off de Pareto solo se sostiene con holgura.** Las esperas difieren en ~30 segundos a lo largo de toda la frontera con 60 tareas. Al subir la carga las diferencias desaparecen: con 150+ tareas todas las políticas son idénticas. El trade-off es real pero está confinado a una banda estrecha de carga, y ahí su magnitud es chica.
 4. **Las métricas normalizadas por throughput engañan bajo saturación.** La energía por tarea atendida *baja* de 74 a 61 Wh al triplicar la carga — porque la energía total se estanca mientras las tareas atendidas siguen subiendo. Un sistema que descarta el 45% del trabajo se ve máximamente eficiente. Toda conclusión por encima de 150 tareas debe leerse junto con la tasa de finalización.
-5. **Escala pequeña.** 5 GPUs, 60 tareas, 4 horas. La fragmentación y las decisiones de colocación cambian cualitativamente a escala de cientos de nodos.
-6. **Sin trazas reales.** Los workloads son sintéticos; las distribuciones de duración y demanda no provienen de mediciones.
-7. **No se modela el consumo de agua**, pese a ser parte de la motivación original. El agua depende del diseño de refrigeración y del clima, no del scheduler — el software solo puede desplazarla en tiempo y espacio.
+5. **El resultado del mecanismo vale para una clase de scheduler.** Los hallazgos 6 y 7 se midieron sobre dos políticas greedy sin estado (más vacía y más llena). Schedulers con estado, predictivos o con desalojo podrían conservar influencia donde estos la pierden. La métrica de Decision Impact es además miope —captura el costo instantáneo, no las consecuencias posteriores de una colocación— así que es una cota inferior.
+6. **Escala pequeña.** 5 GPUs, 60 tareas, 4 horas. La fragmentación y las decisiones de colocación cambian cualitativamente a escala de cientos de nodos.
+7. **Sin trazas reales.** Los workloads son sintéticos; las distribuciones de duración y demanda no provienen de mediciones.
+8. **No se modela el consumo de agua**, pese a ser parte de la motivación original. El agua depende del diseño de refrigeración y del clima, no del scheduler — el software solo puede desplazarla en tiempo y espacio.
 
 ### Cómo ejecutar localmente
 
@@ -183,9 +197,10 @@ O expoente cúbico vem das leis de afinidade de ventiladores (a potência do ven
 2. **Os custos de boot são estimados.** 3 minutos a 400 W é plausível mas não medido — e esse parâmetro determina onde cai a fronteira do achado #2.
 3. **O trade-off de Pareto só vale com folga.** As esperas diferem em ~30 segundos ao longo de toda a fronteira com 60 tarefas. Ao aumentar a carga as diferenças somem: com 150+ tarefas todas as políticas são idênticas. O trade-off é real mas está confinado a uma faixa estreita de carga, e ali sua magnitude é pequena.
 4. **Métricas normalizadas por throughput enganam sob saturação.** A energia por tarefa atendida *cai* de 74 para 61 Wh ao triplicar a carga — porque a energia total estagna enquanto as tarefas atendidas continuam subindo. Um sistema que descarta 45% do trabalho parece maximamente eficiente. Qualquer conclusão acima de 150 tarefas deve ser lida junto com a taxa de conclusão.
-5. **Escala pequena.** 5 GPUs, 60 tarefas, 4 horas. Fragmentação e decisões de alocação mudam qualitativamente na escala de centenas de nós.
-6. **Sem traces reais.** Os workloads são sintéticos; as distribuições de duração e demanda não vêm de medições.
-7. **O consumo de água não é modelado**, apesar de fazer parte da motivação original. A água depende do projeto de refrigeração e do clima, não do scheduler — o software só pode deslocá-la no tempo e no espaço.
+5. **O resultado do mecanismo vale para uma classe de scheduler.** Os achados 6 e 7 foram medidos sobre duas políticas greedy sem estado (mais vazia e mais cheia). Schedulers com estado, preditivos ou com preempção podem manter influência onde estes a perdem. A métrica de Decision Impact é além disso míope —captura o custo instantâneo, não as consequências posteriores de uma alocação— portanto é um limite inferior.
+6. **Escala pequena.** 5 GPUs, 60 tarefas, 4 horas. Fragmentação e decisões de alocação mudam qualitativamente na escala de centenas de nós.
+7. **Sem traces reais.** Os workloads são sintéticos; as distribuições de duração e demanda não vêm de medições.
+8. **O consumo de água não é modelado**, apesar de fazer parte da motivação original. A água depende do projeto de refrigeração e do clima, não do scheduler — o software só pode deslocá-la no tempo e no espaço.
 
 ### Como rodar localmente
 
@@ -214,7 +229,8 @@ The model is defined once and imported by both notebooks, so a change to the phy
 ## 🔭 Next steps
 
 - Sweep boot cost, now the critical parameter
-- Sweep the 60–150 task band finely, to find where scheduling choice has maximum leverage
+- Extend Decision Impact beyond the myopic case, to capture downstream effects of a placement
+- Test whether the equivalence mechanism holds for scheduler classes other than stateless greedy policies
 - Investigate fragmentation: spreading leaves capacity split across GPUs in unusable pieces, which is the likely cause of its worse tail latency
 - Validate workload distributions against public cluster traces
 - Investigate the observed mechanism by which variable load reduces packing's disadvantage (less thrashing during troughs)

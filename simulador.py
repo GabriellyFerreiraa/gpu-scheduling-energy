@@ -1,11 +1,13 @@
 """
-Modelo del data center - v5
+Modelo del data center - v7
 
 v2: factor_hotspot pasa de constante global a parametro
 v3: generar_workloads_ondas (llegadas con picos y valles)
 v4: metricas de latencia (espera_p95, espera_max, sin_iniciar,
     pct_atendidas)
 v5: n_tareas parametrizable, para poder saturar el sistema
+v6: metricas de cola (cola_max, cola_prom)
+v7: n_gpus parametrizable
 """
 import random
 
@@ -94,14 +96,16 @@ def elegir_consolidar(gpus, w):
     return max(c, key=lambda g: g.carga) if c else None
 
 
-def simular(elegir_gpu, workloads, idle_timeout, factor_hotspot):
-    gpus = [GPU(i, idle_timeout, factor_hotspot) for i in range(N_GPUS)]
+def simular(elegir_gpu, workloads, idle_timeout, factor_hotspot,
+            n_gpus=N_GPUS):
+    gpus = [GPU(i, idle_timeout, factor_hotspot) for i in range(n_gpus)]
     gpus[0].estado = "on"
     pendientes = sorted(workloads, key=lambda w: w.llegada)
     cola = []
     energia_it = 0.0
     energia_cool = 0.0
     encendidos = 0
+    historial_cola = []
 
     for t in range(TICKS):
         while pendientes and pendientes[0].llegada == t:
@@ -122,6 +126,8 @@ def simular(elegir_gpu, workloads, idle_timeout, factor_hotspot):
             if apagadas:
                 apagadas[0].encender()
                 encendidos += 1
+
+        historial_cola.append(len(cola))
 
         energia_it += sum(g.potencia() for g in gpus) / 60 / 1000
         energia_cool += sum(g.potencia_cooling() - g.potencia()
@@ -157,6 +163,10 @@ def simular(elegir_gpu, workloads, idle_timeout, factor_hotspot):
         "espera_max": esperas[-1] if esperas else 0,
         "sin_iniciar": sin_iniciar,
         "pct_atendidas": len(iniciadas) / len(workloads) * 100,
+        # --- cola ---
+        "cola_max": max(historial_cola) if historial_cola else 0,
+        "cola_prom": (sum(historial_cola) / len(historial_cola)
+                      if historial_cola else 0),
     }
 
 
